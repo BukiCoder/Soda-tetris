@@ -17,17 +17,19 @@
 typedef struct game GAME;
 typedef struct figure_state FIGURE_STATE;
 
-
-
-
-
 pthread_t timer;
+enum 
+{
+    ORANGE_R = 765,
+    ORANGE_G = 280 + 140,
+    ORANGE_B = 0,
+};
 
 void init()
 {
     setlocale(LC_ALL, "");
-    srand(time(NULL)); // Initialization, should only be called once.
-    initscr();         /* Start curses mode 		*/
+    srand(time(NULL));
+    initscr();
     cbreak();
     nodelay(stdscr, TRUE);
     noecho();
@@ -36,12 +38,7 @@ void init()
     curs_set(0);
 }
 
-enum 
-{
-    ORANGE_R = 765,
-    ORANGE_G = 280 + 140,
-    ORANGE_B = 0,
-};
+
 
 void init_colors()
 {
@@ -93,7 +90,6 @@ void set_main_border(GAME* game)
     }
 }
 
-
 void* print_time(void* arg)
 {
     GAME* game= (GAME*)(arg);
@@ -118,20 +114,18 @@ int64_t millis()
     timespec_get(&now, TIME_UTC);
     return ((int64_t) now.tv_sec) * 1000 + ((int64_t) now.tv_nsec) / 1000000;
 }
+
 int main(int argc, char *argv[])
 {
     init();
     init_colors();
-    
-   
     int in_ch;
-    int starty = (LINES - HEIGHT - 2) / 2;	/* Calculating for a center placement */
-    int startx = (COLS -  WIDTH * 2 - 4) / 2;	/* of the window		*/
+    
+    int starty = (LINES - HEIGHT - 2) / 2;	
+    int startx = (COLS -  WIDTH * 2 - 4) / 2;
 
 
     WINDOW *main_win = create_newwin(HEIGHT + 2, WIDTH * 2 + 4, starty, startx);
-    
-
     WINDOW *score_win = create_newwin(R_HEIGHT_SCORE, R_WIDTH_SCORE, starty, startx + WIDTH * 2 + 4 + 4);
     box(score_win, 0, 0);
 
@@ -157,17 +151,13 @@ int main(int argc, char *argv[])
     FIGURE_STATE curr_figure = {0};
     
 LL:
- 
     spawn_figure(&curr_game, &curr_figure, X_SPAWN_POS, Y_SPAWN_POS);
-   
     wrefresh(curr_game.main_window);
     int64_t curr_mills = millis();
     int direction = 0;
 
     while ((in_ch = getch()) != KEY_F(1) && !curr_game.is_game_over)
-
     {
-
         if (millis() - curr_mills > curr_game.speed)
         {
             curr_mills = millis();
@@ -198,17 +188,12 @@ LL:
             break;
 
         case KEY_DOWN:
-
             flushinp();
             moveDown(&curr_game, &curr_figure);
-
             napms(30);
-
             break;
         case KEY_UP:
-
             rotate(&curr_game, &curr_figure);
-
             break;
         case ' ':
             drop(&curr_game, &curr_figure);
@@ -226,7 +211,6 @@ LL:
         mvwaddch(over_win, 4, WIDTH * 2 + 13, 'N' | A_UNDERLINE);
         mvwprintw(over_win, 4, WIDTH * 2 + 14, "%s", "o :(");
 
-
         wrefresh(over_win);
         while((in_ch = getch()) != KEY_F(1))
         {
@@ -236,8 +220,6 @@ LL:
                 endwin();
                 return 0;
             case 'y':
-                // destroy_win(main_win);
-                // refresh();
                 pthread_join(timer, NULL);
                 werase(over_win);
                 wrefresh(over_win);
@@ -264,11 +246,8 @@ LL:
                 wrefresh(curr_game.main_window);
                 refresh();
                 goto LL;
-
-
                 break;
             }
-
         }
     }
     endwin();
