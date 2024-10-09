@@ -37,8 +37,8 @@ void moveSide(GAME* game, FIGURE_STATE* figure, int add, char moveSideOn_curr[8]
     draw(game, figure->xpos, ypos, currPiece, curr_figure + 1, DEF_NUM_BLCKS);
 
     wrefresh(game->main_window);
-
 }
+
 void moveRight(GAME* game, FIGURE_STATE* figure)
 {
     moveSide(game, figure, 1, moveSideOn, moveSideOff);
@@ -106,7 +106,6 @@ void drop(GAME* game, FIGURE_STATE* figure)
 
 void moveDown(GAME* game, FIGURE_STATE* figure)
 {
-   
     int xpos = figure->xpos;
     int ypos = figure->ypos;
     int curr_figure = figure->curr_figure;
@@ -116,10 +115,8 @@ void moveDown(GAME* game, FIGURE_STATE* figure)
     char* curr_downOff = moveDownOff[curr_figure][rotation];
     char* curr_piece = pieces[curr_figure][rotation];
 
-
     if (!can_place(game, ypos + 1, xpos, curr_downOn, down_num))
     {
-        
         for (int i = 0; i < 4; i++)
         {
             game->fill[ypos + curr_piece[i * 2 + 1]]++;
@@ -136,6 +133,5 @@ void moveDown(GAME* game, FIGURE_STATE* figure)
         figure->ypos++;
         draw(game, xpos, ypos + 1, curr_downOn, curr_figure + 1, down_num);
     }
-
     wrefresh(game->main_window);
 }
