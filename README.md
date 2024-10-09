@@ -1,5 +1,3 @@
 # Soda-tetris
 Soda-tetris is simple classic tetris for linux, which you can run from console.
-![image description](image.png)
-OR
-<img src="relative/path/in/repository/to/image.svg" width="100"/>
+<img src="image.png" width="100"/>
