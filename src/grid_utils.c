@@ -23,8 +23,8 @@ void add_shadow_block(GAME* game, int y, int x, int color)
 {
     wattron(game->main_window, COLOR_PAIR(color + 8));
     mvwaddwstr(game->main_window, y, x << 1, L"\u2592\u2592");
-
 }
+
 void shift_line(GAME* game, int y_from, int y_to)
 {
     game->fill[y_to] = game->fill[y_from];
@@ -44,8 +44,6 @@ void clear_line(GAME* game, int y)
         color_block(game, y, i, ERASE_COLOR);
     }
 }
-
-
 
 void draw(GAME* game, int x, int y, char *curr_piece, int color, int size)
 {
@@ -113,8 +111,6 @@ int get_distance_lower(GAME* game, int y, int x, char* curr_piece, int size)
     return min;
 }
 
-
-
 void shift_lines(GAME* game, int ypos)
 {
     char shift_lines_m[4];
@@ -124,7 +120,6 @@ void shift_lines(GAME* game, int ypos)
     {
         if ((ypos + k < HEIGHT + 2) && (ypos + k > -1) && game->fill[ypos + k] == WIDTH)
         {
-
             shift_lines_m[shn] = ypos + k;
             shn++;
         }
@@ -168,7 +163,6 @@ void spawn_figure(GAME* game, FIGURE_STATE* prev, int xpos_spawn, int ypos_spawn
     if(prev->curr_figure == randn) randn = 1 + rand() % 7;
     prev->curr_figure = randn; // Returns a pseudo-random integer between 0 and RAND_MAX.
 
-    
     char* curr_piece = pieces[prev->curr_figure][prev->rotation];
     if(!can_place(game, prev->ypos, prev->xpos, curr_piece, DEF_NUM_BLCKS))
     {
