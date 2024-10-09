@@ -1,6 +1,4 @@
 #pragma once 
-#include <ncurses.h>
-#include <time.h>
 
 char moveDownOn[8][4][8] =
 {
