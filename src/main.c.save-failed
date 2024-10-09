@@ -1,0 +1,531 @@
+
+#define _XOPEN_SOURCE 700
+#include <errno.h>
+#include <time.h>
+
+#include <curses.h>
+#include <locale.h>
+#include <ncurses.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+#include <limits.h>
+#include "pallets.h"
+
+enum
+{
+     WIDTH = 10,
+     HEIGHT = 20,
+     DEF_NUM_BLCKS = 4
+};
+
+int ypos = 3;
+char xpos = 4;
+int score;
+
+
+
+WINDOW *my_win;
+WINDOW *score_win;
+char grid[HEIGHT + 2][WIDTH + 2];
+char vmax[WIDTH + 2] = { 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 };
+char fill[HEIGHT + 2];
+
+
+
+
+int curr_figure = 1;
+int r = 0;
+int is_game_over = 0;
+
+WINDOW *create_newwin(int height, int width, int starty, int startx)
+{
+    WINDOW *local_win;
+    local_win = newwin(height, width, starty, startx);
+    wrefresh(local_win);
+    return local_win;
+}
+
+void destroy_win(WINDOW *local_win)
+{
+    wborder(local_win, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ');
+    wrefresh(local_win);
+    delwin(local_win);
+}
+
+
+void init_colors()
+{
+    if(can_change_color())
+    {
+        init_color(9, 510 + 255, 280 + 140, 0);
+        init_pair(3, 9, 9);
+        init_pair(3 + 8, 9, COLOR_BLACK);
+    }
+    else
+    {
+        init_pair(3, COLOR_WHITE, COLOR_WHITE);
+        init_pair(3 + 8, COLOR_WHITE, COLOR_BLACK);
+    }
+
+    init_pair(1, COLOR_BLACK, COLOR_BLACK);
+    init_pair(2, COLOR_CYAN, COLOR_CYAN);
+    init_pair(5, COLOR_YELLOW, COLOR_YELLOW);
+    init_pair(7, COLOR_GREEN, COLOR_GREEN);
+
+    init_pair(4, COLOR_MAGENTA, COLOR_MAGENTA);
+    init_pair(6, COLOR_BLUE, COLOR_BLUE);
+    init_pair(8, COLOR_RED, COLOR_RED);
+
+    init_pair(2 + 8, COLOR_CYAN, COLOR_BLACK);
+    init_pair(5 + 8, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(7 + 8, COLOR_GREEN, COLOR_BLACK);
+
+    init_pair(4 + 8, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(6 + 8, COLOR_BLUE, COLOR_BLACK);
+    init_pair(8 + 8, COLOR_RED, COLOR_BLACK);
+
+}
+
+
+void color_block(char y, char x, int index)
+{
+    mvwchgat(my_win, y, x << 1, 2, COLOR_PAIR(index) | A_REVERSE, index, NULL);
+
+    //wattron(my_win, COLOR_PAIR(index) |A_REVERSE );
+    //mvwaddstr(my_win, y, x<<1, "  ");
+}
+
+void add_virtual_block(char y, char x, int index)
+{
+    // mvwchgat(my_win, y, x<<1, 2,COLOR_PAIR(index) |A_REVERSE, index, NULL);
+
+    wattron(my_win, COLOR_PAIR(index + 8));
+    mvwaddwstr(my_win, y, x << 1, L"\u2592\u2592");
+}
+void shift_line(int y_from, int y_to)
+{
+    fill[y_to] = fill[y_from];
+
+    for (int i = 1; i < WIDTH + 1; i++)
+    {
+        color_block(y_to, i, grid[y_from][i] + 1);
+        grid[y_to][i] = grid[y_from][i];
+    }
+}
+
+void clear_line(char y)
+{
+    for (int i = 1; i < WIDTH - 1; i++)
+    {
+        grid[y][i] = 0;
+        color_block(y, i, 1);
+    }
+}
+
+int vxpos = 0;
+int vypos = HEIGHT;
+
+void draw(int xpos, int ypos, char *currPiece, int color,  int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        color_block(ypos + currPiece[i * 2 + 1], xpos + currPiece[i * 2], color);
+    }
+}
+
+void draw_virtual(int vxpos, int vypos, char *currPiece, int color, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        add_virtual_block(vypos + currPiece[i * 2 + 1], xpos + currPiece[i * 2], color);
+    }
+}
+
+int get_distance(int ypos, int xpos, char* currPiece)
+{
+    int min_height = WIDTH * 2 + 2;
+    for (int i = 0; i < 4; i++)
+    {
+        int height = -ypos - currPiece[i * 2 + 1] + vmax[xpos + currPiece[i * 2]];
+        if (min_height > height)
+        {
+            min_height = height;
+        }
+    }
+    return min_height;
+}
+
+int can_place(int ypos, int xpos, char* currPiece, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        if (grid[ypos + currPiece[i * 2 + 1]][xpos + currPiece[i * 2]] != 0)
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int get_d(int ypos, int xpos, char* currPiece, int size)
+{
+    int min = INT_MAX;
+    for(int i = 0; i < size; i++)
+    {
+        int typos = ypos + currPiece[i * 2 + 1];
+        int txpos = xpos + currPiece[i * 2];
+        int j;
+        for(j = typos; j < HEIGHT + 2; j++)
+        {
+            if(grid[j][txpos] != 0)
+            {
+                if(min > j - typos)
+                {
+                    min = j - typos;
+
+                }
+                break;
+
+            }
+
+        }
+    }
+    return min;
+}
+
+void moveSide(int add, char moveSideOn_curr[8][4][8], char moveSideOff_curr[8][4][8])
+{
+    char* currOn = moveSideOn_curr[curr_figure][r];
+    char* currOff = moveSideOff_curr[curr_figure][r];
+    char* currPiece = pieces[curr_figure][r];
+
+    if(!can_place(ypos, xpos + add, currOn, moveSideNum[curr_figure][r]) )
+    {
+        return;
+    }
+
+    draw(xpos, ypos, currOff, 1, moveSideNum[curr_figure][r]);
+    draw(xpos, vypos, currPiece, 1, DEF_NUM_BLCKS);
+
+    xpos += add;
+    vypos = ypos + get_distance(ypos, xpos, currPiece) - 1;
+
+    if(vypos < ypos)
+    {
+        vypos = ypos + get_d(ypos, xpos,  currPiece, DEF_NUM_BLCKS) - 1;
+    }
+    if(vypos != ypos) draw_virtual(vxpos, vypos, currPiece, curr_figure + 1, DEF_NUM_BLCKS);
+
+    draw(xpos, ypos, currPiece, curr_figure + 1, DEF_NUM_BLCKS);
+
+    wrefresh(my_win);
+
+}
+void moveRight()
+{
+    moveSide(1, moveSideOn, moveSideOff);
+}
+
+void moveLeft()
+{
+    moveSide(-1, moveSideOff, moveSideOn);
+}
+
+void rotate()
+{
+
+    int j = 0;
+    int r_temp = (r + 1) % 4;
+    char* temp_piece = pieces[curr_figure][r_temp];
+    char* curr_piece = pieces[curr_figure][r];
+
+    if(!can_place(ypos, xpos, temp_piece, DEF_NUM_BLCKS) )
+    {
+        return;
+    }
+    r = r_temp;
+    draw(xpos, ypos, curr_piece, 1, DEF_NUM_BLCKS);
+    draw(xpos, vypos, curr_piece, 1, DEF_NUM_BLCKS);
+
+    vypos = ypos + get_distance(ypos, xpos, temp_piece) - 1;
+
+    if(vypos < ypos)
+    {
+        vypos = ypos + get_d(ypos, xpos,  temp_piece, DEF_NUM_BLCKS) - 1;
+    }
+
+    if(vypos != ypos) draw_virtual(vxpos, vypos, temp_piece, curr_figure + 1, DEF_NUM_BLCKS);
+    draw(xpos, ypos, temp_piece, curr_figure + 1, DEF_NUM_BLCKS);
+
+    wrefresh(my_win);
+}
+
+enum
+{
+    X_SPAWN_POS = 3,
+    Y_SPAWN_POS = 3
+};
+
+void shift_lines(int ypos)
+{
+    char shift_lines_m[4];
+    int shn = 0;
+
+    for (int k = 3; k > -3; k--)
+    {
+        if ((ypos + k < HEIGHT + 2) && (ypos + k > -1) && fill[ypos + k] == WIDTH)
+        {
+
+            shift_lines_m[shn] = ypos + k;
+            shn++;
+        }
+    }
+
+    for (int k = 0; k < shn - 1; k++)
+    {
+        for (int kk = shift_lines_m[k] - 1; kk > shift_lines_m[k + 1]; kk--)
+        {
+            shift_line(kk, kk + k + 1);
+        }
+    }
+
+    if (shn > 0)
+    {
+        for (int kk = shift_lines_m[shn - 1] - 1; kk > shn; kk--)
+        {
+            shift_line(kk, kk + shn);
+        }
+    }
+    for (int k = 0; k < WIDTH + 2; k++)
+    {
+        vmax[k] += shn;
+    }
+
+    //mvwprintw(my_win, 0, 0, "%d", shn);
+
+}
+
+void game_over()
+{
+   is_game_over = 1;
+}
+void spawn_figure(int xpos_spawn, int ypos_spawn)
+{
+    ypos = xpos_spawn;
+    xpos = ypos_spawn;
+    r = 0;
+
+
+    curr_figure = 1 + rand() % 7; // Returns a pseudo-random integer between 0 and RAND_MAX.
+
+    vxpos = 3;
+    char* currPiece = pieces[curr_figure][r];
+    if(!can_place(ypos, xpos, currPiece, DEF_NUM_BLCKS))
+    {
+        game_over();
+    }
+
+    vypos = ypos + get_distance(ypos, xpos, currPiece) - 1;
+
+    draw_virtual(vxpos, vypos, currPiece, curr_figure + 1, DEF_NUM_BLCKS);
+    draw(xpos, ypos, currPiece, curr_figure + 1, DEF_NUM_BLCKS);
+}
+
+void drop()
+{
+    char* currPiece = pieces[curr_figure][r];
+
+    draw(xpos, ypos, currPiece, 1, 4);
+
+    ypos = vypos;
+    draw(xpos, ypos, currPiece, curr_figure+1, DEF_NUM_BLCKS);
+
+
+    for (int i = 0; i < 4; i++)
+    {
+        fill[ypos + currPiece[i * 2 + 1]]++;
+        vmax[xpos + currPiece[i * 2]] = (vmax[xpos + currPiece[i * 2]] > (ypos + currPiece[i * 2 + 1]))? (ypos + currPiece[i * 2 + 1]) : vmax[xpos + currPiece[i * 2]];
+        grid[ypos + currPiece[i * 2 + 1]][xpos + currPiece[i * 2]] = curr_figure;
+    }
+
+    shift_lines(ypos);
+    spawn_figure(X_SPAWN_POS, Y_SPAWN_POS);
+    wrefresh(my_win);
+}
+
+
+
+void moveDown()
+{
+    int down_num = moveDownNum[curr_figure][r];
+    char* curr_downOn = moveDownOn[curr_figure][r];
+    char* curr_downOff = moveDownOff[curr_figure][r];
+    char* currPiece = pieces[curr_figure][r];
+
+
+    if (!can_place(ypos + 1, xpos, curr_downOn, down_num))
+    {
+
+        for (int i = 0; i < 4; i++)
+        {
+            fill[ypos + currPiece[i * 2 + 1]]++;
+            vmax[xpos + currPiece[i * 2]] = (vmax[xpos + currPiece[i * 2]] > (ypos + currPiece[i * 2 + 1]))? (ypos + currPiece[i * 2 + 1]) : vmax[xpos + currPiece[i * 2]];
+            grid[ypos + currPiece[i * 2 + 1]][xpos + currPiece[i * 2]] = curr_figure;
+        }
+
+        shift_lines(ypos);
+        spawn_figure(X_SPAWN_POS, Y_SPAWN_POS);
+    }
+    else
+    {
+        draw(xpos, ypos, curr_downOff, 1, down_num);
+        ypos++;
+        draw(xpos, ypos, curr_downOn, curr_figure + 1, down_num);
+    }
+
+    wrefresh(my_win);
+}
+int lp = 0;
+
+
+
+int64_t millis()
+{
+    struct timespec now;
+    timespec_get(&now, TIME_UTC);
+    return ((int64_t) now.tv_sec) * 1000 + ((int64_t) now.tv_nsec) / 1000000;
+}
+int main(int argc, char *argv[])
+{
+
+    setlocale(LC_ALL, "");
+
+    int  width, height;
+    int ch;
+    srand(time(NULL)); // Initialization, should only be called once.
+    initscr();         /* Start curses mode 		*/
+    cbreak();
+    // noecho();
+    nodelay(stdscr, TRUE);
+    // delay_output(250);
+    noecho();
+    keypad(stdscr, TRUE);
+    start_color();
+
+    height = HEIGHT;
+
+    width = WIDTH;
+    curs_set(0);
+
+
+    int starty = (LINES - height - 2) / 2;	/* Calculating for a center placement */
+    int startx = (COLS -  width * 2 - 4) / 2;	/* of the window		*/
+
+
+
+    refresh();
+
+    my_win = create_newwin(height + 2, width * 2 + 4, starty, startx);
+      score_win = create_newwin(5, 5, starty, startx + 20);
+
+    for (int i = 0; i < HEIGHT + 2; i++)
+    {
+        mvwaddwstr(my_win, i, 1, L"\u2588");
+        mvwaddwstr(my_win, i, (WIDTH + 2) * 2 - 2, L"\u2588");
+        grid[i][0] = 1;
+        grid[i][WIDTH + 1] = 1;
+    }
+
+    for (int i = 1; i < WIDTH * 2 + 3; i++)
+    {
+        mvwaddwstr(my_win, 0, i, L"\u2584");
+        mvwaddwstr(my_win, HEIGHT + 1, i, L"\u2580");
+        grid[HEIGHT + 1][i] = 1;
+    }
+     for (int i = 0; i < 5; i++)
+
+     {
+        mvwaddwstr(my_win, i, 1, L"\u2588");
+        mvwaddwstr(my_win, i, 4, L"\u2588");
+
+    }
+
+    for (int i = 1; i < W5; i++)
+    {
+        mvwaddwstr(my_win, 0, i, L"\u2584");
+        mvwaddwstr(my_win, 5, i, L"\u2580");
+
+    }
+    wrefresh(my_win);
+    pthread_t thread;
+    wrefresh(my_win);
+    init_colors();
+    int col, row;
+    col = 1;
+    row = 1;
+
+    wrefresh(my_win);
+    int64_t ml = millis();
+    int direction = 0;
+    while ((ch = getch()) != KEY_F(1) && !is_game_over)
+
+    {
+
+        if (millis() - ml > 800)
+        {
+            ml = millis();
+            moveDown();
+        }
+
+        switch (ch)
+        {
+        case KEY_LEFT:
+            if (direction == -1)
+            {
+                napms(50);
+            }
+            moveLeft();
+            direction = 1;
+            napms(35);
+            flushinp();
+            break;
+        case KEY_RIGHT:
+            if (direction == 1)
+            {
+                napms(50);
+            }
+            moveRight();
+            direction = -1;
+            napms(35);
+            flushinp();
+            break;
+
+        case KEY_DOWN:
+
+            flushinp();
+            moveDown();
+
+            napms(30);
+
+            break;
+        case KEY_UP:
+
+            rotate();
+
+            break;
+        case ' ':
+            drop();
+            break;
+        }
+    }
+
+    endwin();
+
+    getch();
+    return 0;
+}
+
+
